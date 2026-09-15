@@ -11,7 +11,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 @TeleOp(name = "Robot: Field Relative Mecanum Drive", group = "Robot")
-public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
+public class RobotTeleopMecanumFieldRelativeDrive2 extends OpMode {
 
     private boolean lastButtonState = false;
     private boolean motorOn = false;
