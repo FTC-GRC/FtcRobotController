@@ -112,7 +112,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             }
             boolean currentButtonState = gamepad1.b;
             if (currentButtonState && !lastButtonState) {
-                motorOn = !motorOn; // Wissel de status (true wordt false, false wordt true)
+                motorOn = !motorOn; // Changes status (true -> false, false -> true)
                 if (motorOn) {
                     intakeMotor.setPower(1.0);  // Zet motor aan
                 } else {
