@@ -15,8 +15,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
 
     static final double DEADBAND = 0.05;
-    static final double MAX_SPEED = 1.0;   // make this lower for outreaches
-    static final double TURN_SCALE = 0.80; // full stick turn rate feels twitchy at 1.0
+    static final double MAX_SPEED = 1.0;
+    static final double TURN_SCALE = 0.80;
 
     private boolean lastButtonState = false;
     private boolean motorOn = false;
@@ -86,8 +86,6 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
         }
         lastButtonState = currentButtonState;
 
-        // Stick position maps straight to speed: a light push is a slow crawl,
-        // full push is full power, with no ramping in between.
         double forward = deadband(-gamepad1.left_stick_y);
         double right   = deadband(gamepad1.left_stick_x);
         double rotate  = deadband(gamepad1.right_stick_x) * TURN_SCALE;
@@ -98,11 +96,6 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
             driveFieldRelative(forward, right, rotate);
         }
     }
-
-    // Squares the input past the deadband: a small push near center gives an even
-    // slower crawl than a linear mapping would, while a full push still hits 100%.
-    // This is what actually gives you "low stick = slow move" at fine control,
-    // not just proportional but easier to be precise with near zero.
     private double deadband(double value) {
         if (Math.abs(value) < DEADBAND) return 0;
         double scaled = (Math.abs(value) - DEADBAND) / (1.0 - DEADBAND);
@@ -128,8 +121,6 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
 
         drive(newForward, newRight, rotate);
     }
-
-    // Thanks to FTC16072 for sharing this code!!
     public void drive(double forward, double right, double rotate) {
         double frontLeftPower  = forward + right + rotate;
         double frontRightPower = forward - right - rotate;
