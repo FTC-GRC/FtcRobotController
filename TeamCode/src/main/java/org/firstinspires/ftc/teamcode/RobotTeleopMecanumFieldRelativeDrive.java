@@ -32,6 +32,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
     /*
@@ -50,16 +51,96 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
      */
     @TeleOp(name = "Robot: Field Relative Mecanum Drive", group = "Robot")
     public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
+
+        /**
+          Motor main context class, wow
+        */
+        public class motor_class
+        {
+            public final ButtonOptions motor_activating_button;
+
+            public boolean motorOn = false;
+            public boolean motor_lastButtonState = false;
+
+            public motor_class(boolean motorOn, boolean motor_lastButtonState, ButtonOptions activating_button) {
+                this.motorOn = motorOn;
+                this.motor_lastButtonState = motor_lastButtonState;
+                this.motor_activating_button = activating_button;
+            }
+
+            /**
+             Checks if can motor become active or not
+             @param motor motor itself
+            */
+            public void Possible_motor_ActivatingCheck(DcMotor motor){
+                if (IsChosenButtonActive(motor_activating_button)) {
+                    motorOn = !motorOn;
+                    motor.setPower(motorOn ? 1.0 : 0.0);
+                }
+                motor_lastButtonState = motorOn;
+            }
+
+            /**
+             Checks if chosen and given to a void button is active now
+            */
+
+            public boolean IsChosenButtonActive(ButtonOptions buttonOption){
+                switch(buttonOption){
+                    case x:
+                        return gamepad1.x;
+                    case a:
+                        return gamepad1.a;
+                    case y:
+                        return gamepad1.y;
+                    case b:
+                        return gamepad1.b;
+                }
+
+                return false;
+            }
+        }
+
+        public enum ButtonOptions{
+            x,
+            y,
+            b,
+            a
+        }
+
+
+
+        public class first_motor extends motor_class
+        {
+            public first_motor(boolean motorOn, boolean motor_lastButtonState, ButtonOptions motor_activating_button){
+                super(motorOn, motor_lastButtonState, motor_activating_button);
+            }
+        }
+
+        public class second_motor extends motor_class
+        {
+            public second_motor(boolean motorOn, boolean motor_lastButtonState, ButtonOptions motor_activating_button) {
+                super(motorOn, motor_lastButtonState, motor_activating_button);
+            }
+        }
+
+        private first_motor first_motor = new first_motor(false, false, ButtonOptions.a);
+        private second_motor second_motor = new second_motor(false, false, ButtonOptions.b);
+
         // This declares the four motors needed
-        private boolean lastButtonState = false;
-        private boolean motorOn = false;
-        DcMotor frontLeftDrive;
-        DcMotor frontRightDrive;
-        DcMotor backLeftDrive;
-        DcMotor backRightDrive;
-        DcMotor intakeMotor;
+        private DcMotor frontLeftDrive;
+        private DcMotor frontRightDrive;
+        private DcMotor backLeftDrive;
+        private DcMotor backRightDrive;
+
+
+        private DcMotor intakeMotor;
+        private DcMotor second_intakeMotor;
+
+
+
         // This declares the IMU needed to get the current direction the robot is facing
-        IMU imu;
+        private IMU imu;
+
 
         @Override
         public void init() {
@@ -67,7 +148,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             frontRightDrive = hardwareMap.get(DcMotor.class, "frd");
             backLeftDrive = hardwareMap.get(DcMotor.class, "bld");
             backRightDrive = hardwareMap.get(DcMotor.class, "brd");
+
             intakeMotor = hardwareMap.get(DcMotor.class, "Intake");
+            second_intakeMotor = hardwareMap.get(DcMotor.class, "Intake2");
 
             // We set the left motors in reverse which is needed for drive trains where the left
             // motors are opposite to the right ones.
@@ -76,10 +159,15 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             backRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
             frontLeftDrive.setDirection(DcMotor.Direction.FORWARD);
             frontRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
-            intakeMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
-            // This uses RUN_USING_ENCODER to be more accurate.   If you don't have the encoder
-            // wires, you should remove these
+            intakeMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+            second_intakeMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+            /* This uses RUN_USING_ENCODER to be more accurate.
+            /*
+            /* If you don't have the encoder
+            /* wires, you should remove these
+            */
 
             frontLeftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             frontRightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -110,16 +198,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             if (gamepad1.a) {
                 imu.resetYaw();
             }
-            boolean currentButtonState = gamepad1.b;
-            if (currentButtonState && !lastButtonState) {
-                motorOn = !motorOn; // Changes status (true -> false, false -> true)
-                if (motorOn) {
-                    intakeMotor.setPower(1.0);  // Zet motor aan
-                } else {
-                    intakeMotor.setPower(0.0);  // Zet motor uit
-                }
-            }
-            lastButtonState = currentButtonState;
+
+            first_motor.Possible_motor_ActivatingCheck(intakeMotor);
+            second_motor.Possible_motor_ActivatingCheck(second_intakeMotor);
+
             // If you press the left bumper, you get a drive from the point of view of the robot
             // (much like driving an RC vehicle)
             if (gamepad1.left_bumper) {
@@ -152,10 +234,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             double maxPower = 1.0;
             double maxSpeed = 1.0;
 
-            // make this slower for outreaches
-            // This is needed to make sure we don't pass > 1.0 to any wheel
-            // It allows us to keep all of the motors in proportion to what they should
-            // be and not get clipped
+            /*
+             Make this slower for outreaches
+             This is needed to make sure we don't pass > 1.0 to any wheel
+             It allows us to keep all of the motors in proportion to what they should
+             wires, you should remove these
+            */
 
             maxPower = Math.max(maxPower, Math.abs(frontLeftPower));
             maxPower = Math.max(maxPower, Math.abs(frontRightPower));
