@@ -1,33 +1,29 @@
 package org.firstinspires.ftc.teamcode;
-
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.Range;
-
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 @TeleOp(name = "Robot: Field Relative Mecanum Drive", group = "Robot")
-public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
-
+public class Better extends OpMode {
     static final double DEADBAND = 0.05;
     static final double MAX_SPEED = 1.0;
     static final double TURN_SCALE = 0.80;
-
     private boolean lastButtonState = false;
     private boolean motorOn = false;
-
     DcMotor frontLeftDrive;
     DcMotor frontRightDrive;
     DcMotor backLeftDrive;
     DcMotor backRightDrive;
     DcMotor intakeMotor;
-
     GoBildaPinpointDriver odo;
+    Limelight3A limelight;
 
     @Override
     public void init() {
@@ -36,6 +32,7 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
         backLeftDrive   = hardwareMap.get(DcMotor.class, "bld");
         backRightDrive  = hardwareMap.get(DcMotor.class, "brd");
         intakeMotor     = hardwareMap.get(DcMotor.class, "Intake");
+        limelight       = hardwareMap.get(Limelight3A.class, "limelight");
 
         backLeftDrive.setDirection(DcMotor.Direction.FORWARD);
         backRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -56,36 +53,26 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
         odo.setOffsets(-84.0, -168.0, DistanceUnit.MM);   // measure on your robot
         odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD,
-                GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.FORWARD);
         odo.resetPosAndIMU();
 
-        telemetry.addLine("Pinpoint initialized - keep the robot still");
-        telemetry.update();
-    }
+        limelight.pipelineSwitch(/*Nummer*/8); //moet nog kijken welke het is
 
+    }
     @Override
     public void loop() {
         odo.update();
-
-        telemetry.addLine("Press A to reset Yaw");
-        telemetry.addLine("Hold left bumper to drive in robot relative");
-        telemetry.addLine("The left joystick sets the robot direction and speed");
-        telemetry.addLine("Moving the right joystick left and right turns the robot");
-        telemetry.addData("Heading (deg)", "%.1f",
-                odo.getPosition().getHeading(AngleUnit.DEGREES));
+        odo.getPosition().getHeading(AngleUnit.DEGREES);
 
         if (gamepad1.a) {
             resetYaw();
         }
-
         boolean currentButtonState = gamepad1.b;
         if (currentButtonState && !lastButtonState) {
             motorOn = !motorOn;
             intakeMotor.setPower(motorOn ? 1.0 : 0.0);
         }
         lastButtonState = currentButtonState;
-
         double forward = deadband(-gamepad1.left_stick_y);
         double right   = deadband(gamepad1.left_stick_x);
         double rotate  = deadband(gamepad1.right_stick_x) * TURN_SCALE;
@@ -101,7 +88,6 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
         double scaled = (Math.abs(value) - DEADBAND) / (1.0 - DEADBAND);
         return Math.signum(value) * scaled * scaled;
     }
-
     private void resetYaw() {
         Pose2D current = odo.getPosition();
         odo.setPosition(new Pose2D(DistanceUnit.MM,
@@ -109,7 +95,6 @@ public class RobotTeleopMecanumFieldRelativeDrive extends OpMode {
                 current.getY(DistanceUnit.MM),
                 AngleUnit.RADIANS, 0));
     }
-
     private void driveFieldRelative(double forward, double right, double rotate) {
         double theta = Math.atan2(forward, right);
         double r = Math.hypot(right, forward);
