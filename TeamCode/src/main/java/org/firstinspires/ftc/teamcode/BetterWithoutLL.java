@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
-import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -11,7 +10,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 @TeleOp(name = "Robot: Field Relative Mecanum Drive", group = "Robot")
-public class Better extends OpMode {
+public class BetterWithoutLL extends OpMode {
     static final double DEADBAND = 0.05;
     static final double MAX_SPEED = 1.0;
     static final double TURN_SCALE = 0.80;
@@ -23,8 +22,6 @@ public class Better extends OpMode {
     DcMotor backRightDrive;
     DcMotor intakeMotor;
     GoBildaPinpointDriver odo;
-    Limelight3A limelight;
-
     @Override
     public void init() {
         frontLeftDrive  = hardwareMap.get(DcMotor.class, "fld");
@@ -32,7 +29,6 @@ public class Better extends OpMode {
         backLeftDrive   = hardwareMap.get(DcMotor.class, "bld");
         backRightDrive  = hardwareMap.get(DcMotor.class, "brd");
         intakeMotor     = hardwareMap.get(DcMotor.class, "Intake");
-        limelight       = hardwareMap.get(Limelight3A.class, "limelight");
 
         backLeftDrive.setDirection(DcMotor.Direction.FORWARD);
         backRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -55,9 +51,6 @@ public class Better extends OpMode {
         odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.FORWARD);
         odo.resetPosAndIMU();
-
-        limelight.pipelineSwitch(/*Nummer*/8); //moet nog kijken welke het is
-
     }
     @Override
     public void loop() {
