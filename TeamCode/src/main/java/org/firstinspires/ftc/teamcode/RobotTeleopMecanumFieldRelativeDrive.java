@@ -1,31 +1,3 @@
-/* Copyright (c) 2025 FIRST. All rights reserved.
-     *
-     * Redistribution and use in source and binary forms, with or without modification,
-     * are permitted (subject to the limitations in the disclaimer below) provided that
-     * the following conditions are met:
-     *
-     * Redistributions of source code must retain the above copyright notice, this list
-     * of conditions and the following disclaimer.
-     *
-     * Redistributions in binary form must reproduce the above copyright notice, this
-     * list of conditions and the following disclaimer in the documentation and/or
-     * other materials provided with the distribution.
-     *
-     * Neither the name of FIRST nor the names of its contributors may be used to endorse or
-     * promote products derived from this software without specific prior written permission.
-     *
-     * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY THIS
-     * LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-     * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
-     * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-     * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
-     * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-     * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-     * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-     * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-     * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-     * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-     */
 package org.firstinspires.ftc.teamcode;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -34,6 +6,8 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
+
+import org.firstinspires.ftc.robotcontroller.external.samples.RobotAutoDriveByEncoder_Linear;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
     /*
      * This OpMode illustrates how to program your robot to drive field relative.  This means
@@ -126,7 +100,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
         private first_motor first_motor = new first_motor(false, false, ButtonOptions.a);
         private second_motor second_motor = new second_motor(false, false, ButtonOptions.b);
 
-        // This declares the four motors needed
         private DcMotor frontLeftDrive;
         private DcMotor frontRightDrive;
         private DcMotor backLeftDrive;
@@ -138,7 +111,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 
 
-        // This declares the IMU needed to get the current direction the robot is facing
         private IMU imu;
 
 
@@ -149,11 +121,14 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             backLeftDrive = hardwareMap.get(DcMotor.class, "bld");
             backRightDrive = hardwareMap.get(DcMotor.class, "brd");
 
+
+            backRightDrive = hardwareMap.get(DcMotor.class, "d-pad");
+
+
+
             intakeMotor = hardwareMap.get(DcMotor.class, "Intake");
             second_intakeMotor = hardwareMap.get(DcMotor.class, "Intake2");
 
-            // We set the left motors in reverse which is needed for drive trains where the left
-            // motors are opposite to the right ones.
 
             backLeftDrive.setDirection(DcMotor.Direction.FORWARD);
             backRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -173,6 +148,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             frontRightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             backLeftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             backRightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
             imu = hardwareMap.get(IMU.class, "imu");
 
             // This needs to be changed to match the orientation on your robot
@@ -217,7 +193,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
             double r = Math.hypot(right, forward);
             // Second, rotate angle by the angle the robot is pointing
             theta = AngleUnit.normalizeRadians(theta - imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS));
-            // Third, convert back to cartesian
             double newForward = r * Math.sin(theta);
             double newRight = r * Math.cos(theta);
             // Finally, call the drive method with robot relative forward and right amounts
