@@ -16,18 +16,20 @@ public class BetterWithoutLL extends OpMode {
     static final double DEADBAND = 0.02;
     static final double MAX_SPEED = 1.0;
     static final double TURN_SCALE = 0.80;
-    // Through Bore Encoder V1: 8192 counts per revolution of the encoder shaft.
-    // The encoder gear (18T) meshes with the big gear (59T), so the big gear turns 18/59 as fast.
-    static final double ENCODER_CPR = 8192.0;
-    static final double GEAR_RATIO = 59.0 / 18.0;  // encoder turns per big gear turn
-    static final double COUNTS_PER_BIG_GEAR_REV = ENCODER_CPR * GEAR_RATIO;  // about 26852
 
-    DcMotor rotatorEncoder;
+    // Through Bore Encoder: 8192 counts per turn. The encoder gear (18T) meshes with the ring (59T).
+    static final double ENCODER_CPR = 8192.0;
+    static final double GEAR_RATIO = 59.0 / 18.0;
+    static final double COUNTS_PER_BIG_GEAR_REV = ENCODER_CPR * GEAR_RATIO;
+    static final double TARGET_COUNTS = 2 * COUNTS_PER_BIG_GEAR_REV;
 
     private boolean lastButtonState = false;
     private boolean motorOn = false;
     private boolean lastShooterButtonState = false;
     private boolean shooterOn = false;
+    private boolean lastYState = false;
+    private boolean autoRotating = false;
+    private int startCounts = 0;
 
     DcMotor frontLeftDrive;
     DcMotor frontRightDrive;
@@ -35,6 +37,7 @@ public class BetterWithoutLL extends OpMode {
     DcMotor backRightDrive;
     DcMotor intakeMotor;
     DcMotor pollenShooter;
+    DcMotor rotatorEncoder;
     CRServo pollenRotator;
     GoBildaPinpointDriver odo;
 
@@ -47,7 +50,7 @@ public class BetterWithoutLL extends OpMode {
         intakeMotor     = hardwareMap.get(DcMotor.class, "Intake");
         pollenShooter   = hardwareMap.get(DcMotor.class, "ps");
         pollenRotator   = hardwareMap.get(CRServo.class, "pr");
-        rotatorEncoder = hardwareMap.get(DcMotor.class, "pre");
+        rotatorEncoder  = hardwareMap.get(DcMotor.class, "pre");
 
         backLeftDrive.setDirection(DcMotor.Direction.FORWARD);
         backRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -62,13 +65,13 @@ public class BetterWithoutLL extends OpMode {
         backLeftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         backRightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
+        rotatorEncoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rotatorEncoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
         frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-
-        rotatorEncoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        rotatorEncoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
         odo.setOffsets(-84.0, -168.0, DistanceUnit.MM);   // measure on your robot
@@ -90,7 +93,10 @@ public class BetterWithoutLL extends OpMode {
         telemetry.addLine("Press B to toggle intake");
         telemetry.addLine("Press X to toggle shooter");
         telemetry.addLine("D-pad right/left: rotate servo, D-pad down: stop servo");
+        telemetry.addLine("Press Y: rotate ring 2 revolutions");
         telemetry.addData("Heading (deg)", "%.1f", odo.getPosition().getHeading(AngleUnit.DEGREES));
+        telemetry.addData("Rotator angle (deg)", "%.1f",
+                rotatorEncoder.getCurrentPosition() * 360.0 / COUNTS_PER_BIG_GEAR_REV);
 
         if (gamepad1.a) {
             resetYaw();
@@ -112,6 +118,19 @@ public class BetterWithoutLL extends OpMode {
         }
         lastShooterButtonState = currentShooterButtonState;
 
+        // Y: rotate the ring 2 revolutions
+        if (gamepad1.y && !lastYState) {
+            autoRotating = true;
+            startCounts = rotatorEncoder.getCurrentPosition();
+            pollenRotator.setPower(1.0);   // change to -1.0 if it spins the wrong way
+        }
+        lastYState = gamepad1.y;
+
+        if (autoRotating && Math.abs(rotatorEncoder.getCurrentPosition() - startCounts) >= TARGET_COUNTS) {
+            pollenRotator.setPower(0.0);
+            autoRotating = false;
+        }
+
         double forward = deadband(-gamepad1.left_stick_y);
         double right   = deadband(gamepad1.left_stick_x);
         double rotate  = deadband(gamepad1.right_stick_x) * TURN_SCALE;
@@ -121,6 +140,7 @@ public class BetterWithoutLL extends OpMode {
         } else {
             driveFieldRelative(forward, right, rotate);
         }
+
         // CRServo rotator: D-pad right = forward, D-pad left = reverse, D-pad down = stop
         if (gamepad1.dpad_right) {
             pollenRotator.setPower(1.0);
@@ -129,10 +149,6 @@ public class BetterWithoutLL extends OpMode {
         } else if (gamepad1.dpad_down) {
             pollenRotator.setPower(0.0);
         }
-        int counts = rotatorEncoder.getCurrentPosition();
-        double bigGearDegrees = counts * 360.0 / COUNTS_PER_BIG_GEAR_REV;
-        telemetry.addData("Rotator counts", counts);
-        telemetry.addData("Rotator angle (deg)", "%.1f", bigGearDegrees);
     }
 
     private double deadband(double value) {
