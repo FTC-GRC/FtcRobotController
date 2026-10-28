@@ -16,6 +16,13 @@ public class BetterWithoutLL extends OpMode {
     static final double DEADBAND = 0.02;
     static final double MAX_SPEED = 1.0;
     static final double TURN_SCALE = 0.80;
+    // Through Bore Encoder V1: 8192 counts per revolution of the encoder shaft.
+    // The encoder gear (18T) meshes with the big gear (59T), so the big gear turns 18/59 as fast.
+    static final double ENCODER_CPR = 8192.0;
+    static final double GEAR_RATIO = 59.0 / 18.0;  // encoder turns per big gear turn
+    static final double COUNTS_PER_BIG_GEAR_REV = ENCODER_CPR * GEAR_RATIO;  // about 26852
+
+    DcMotor rotatorEncoder;
 
     private boolean lastButtonState = false;
     private boolean motorOn = false;
@@ -40,6 +47,7 @@ public class BetterWithoutLL extends OpMode {
         intakeMotor     = hardwareMap.get(DcMotor.class, "Intake");
         pollenShooter   = hardwareMap.get(DcMotor.class, "ps");
         pollenRotator   = hardwareMap.get(CRServo.class, "pr");
+        rotatorEncoder = hardwareMap.get(DcMotor.class, "pre");
 
         backLeftDrive.setDirection(DcMotor.Direction.FORWARD);
         backRightDrive.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -58,6 +66,9 @@ public class BetterWithoutLL extends OpMode {
         frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        rotatorEncoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        rotatorEncoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
         odo.setOffsets(-84.0, -168.0, DistanceUnit.MM);   // measure on your robot
@@ -118,6 +129,10 @@ public class BetterWithoutLL extends OpMode {
         } else if (gamepad1.dpad_down) {
             pollenRotator.setPower(0.0);
         }
+        int counts = rotatorEncoder.getCurrentPosition();
+        double bigGearDegrees = counts * 360.0 / COUNTS_PER_BIG_GEAR_REV;
+        telemetry.addData("Rotator counts", counts);
+        telemetry.addData("Rotator angle (deg)", "%.1f", bigGearDegrees);
     }
 
     private double deadband(double value) {
