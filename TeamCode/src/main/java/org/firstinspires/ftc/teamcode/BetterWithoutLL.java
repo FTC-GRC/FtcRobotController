@@ -11,7 +11,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
-@TeleOp
+@TeleOp(name = "BWLL", group = "At")
 public class BetterWithoutLL extends OpMode {
     static final double DEADBAND = 0.02;
     static final double MAX_SPEED = 1.0;
@@ -59,7 +59,7 @@ public class BetterWithoutLL extends OpMode {
         backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        odo = hardwareMap.get(GoBildaPinpointDriver.class, "imu 1");
+        odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
         odo.setOffsets(-84.0, -168.0, DistanceUnit.MM);   // measure on your robot
         odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD,
@@ -70,6 +70,7 @@ public class BetterWithoutLL extends OpMode {
     @Override
     public void loop() {
         odo.update();
+        odo.getPosition().getHeading(AngleUnit.DEGREES);
 
         telemetry.addLine("Press A to reset Yaw");
         telemetry.addLine("Hold left bumper to drive in robot relative");
