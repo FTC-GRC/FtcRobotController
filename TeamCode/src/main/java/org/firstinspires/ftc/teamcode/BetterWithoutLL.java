@@ -92,7 +92,7 @@ public class BetterWithoutLL extends OpMode {
         telemetry.addLine("Moving the right joystick left and right turns the robot");
         telemetry.addLine("Press B to toggle intake");
         telemetry.addLine("Press X to toggle shooter");
-        telemetry.addLine("D-pad right/left: rotate servo, D-pad down: stop servo");
+        telemetry.addLine("Hold D-pad right/left: rotate servo (release to stop)");
         telemetry.addLine("Press Y: rotate ring 2 revolutions");
         telemetry.addData("Heading (deg)", "%.1f", odo.getPosition().getHeading(AngleUnit.DEGREES));
         telemetry.addData("Rotator angle (deg)", "%.1f",
@@ -141,13 +141,15 @@ public class BetterWithoutLL extends OpMode {
             driveFieldRelative(forward, right, rotate);
         }
 
-        // CRServo rotator: D-pad right = forward, D-pad left = reverse, D-pad down = stop
-        if (gamepad1.dpad_right) {
-            pollenRotator.setPower(1.0);
-        } else if (gamepad1.dpad_left) {
-            pollenRotator.setPower(-1.0);
-        } else if (gamepad1.dpad_down) {
-            pollenRotator.setPower(0.0);
+        // CRServo rotator: hold D-pad right = forward, hold D-pad left = reverse, release = stop
+        if (!autoRotating) {
+            if (gamepad1.dpad_right) {
+                pollenRotator.setPower(1.0);
+            } else if (gamepad1.dpad_left) {
+                pollenRotator.setPower(-1.0);
+            } else {
+                pollenRotator.setPower(0.0);
+            }
         }
     }
 
