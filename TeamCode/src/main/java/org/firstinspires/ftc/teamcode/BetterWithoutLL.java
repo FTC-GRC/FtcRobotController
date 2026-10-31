@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 
 @TeleOp(name = "BWLL", group = "At")
 public class BetterWithoutLL extends OpMode {
@@ -185,13 +186,19 @@ class Intake {
 
 /** The shooter motor, plus the CRServo ring and its Through Bore Encoder. */
 class PollenShooter {
+    // Shooter speed. Ticks per second = RPM * ticks per rev / 60.
+    // SHOOTER_CPR is for the motor's output shaft. 28 is a bare goBILDA/REV motor with no gearbox.
+    static final double SHOOTER_TARGET_RPM = 3300;
+    static final double SHOOTER_CPR = 28;
+    static final double SHOOTER_TARGET_TICKS_PER_SEC = SHOOTER_TARGET_RPM * SHOOTER_CPR / 60.0;
+
     // Through Bore Encoder: 8192 counts per turn. The encoder gear (18T) meshes with the ring (59T).
     static final double ENCODER_CPR = 8192.0;
     static final double GEAR_RATIO = 59.0 / 18.0;
     static final double COUNTS_PER_RING_REV = ENCODER_CPR * GEAR_RATIO;
     static final double TARGET_COUNTS = 2 * COUNTS_PER_RING_REV;
 
-    private final DcMotor shooter;
+    private final DcMotorEx shooter;
     private final CRServo rotator;
     private final DcMotor encoder;
 
@@ -202,21 +209,23 @@ class PollenShooter {
     private int startCounts = 0;
 
     PollenShooter(HardwareMap hardwareMap) {
-        shooter = hardwareMap.get(DcMotor.class, "ps");
+        shooter = hardwareMap.get(DcMotorEx.class, "ps");
         rotator = hardwareMap.get(CRServo.class, "pr");
         encoder = hardwareMap.get(DcMotor.class, "pre");
 
         shooter.setDirection(DcMotorSimple.Direction.REVERSE);
+        shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);   // required for setVelocity()
         rotator.setDirection(DcMotorSimple.Direction.REVERSE);
         encoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         encoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
     }
 
     void update(Control c) {
-        // Shooter toggle
+        // Shooter toggle: on = hold 3300 RPM, off = stop
         if (c.pollenToggle && !lastShooterButton) {
             shooterOn = !shooterOn;
-            shooter.setPower(shooterOn ? 1.0 : 0.0);
+            shooter.setVelocity(shooterOn ? SHOOTER_TARGET_TICKS_PER_SEC : 0);
         }
         lastShooterButton = c.pollenToggle;
 
@@ -248,6 +257,10 @@ class PollenShooter {
     double getAngleDegrees() {
         return encoder.getCurrentPosition() * 360.0 / COUNTS_PER_RING_REV;
     }
+
+    double getShooterRpm() {
+        return shooter.getVelocity() * 60.0 / SHOOTER_CPR;
+    }
 }
 
 /** Puts the control reminders and live readings on the Driver Station. */
@@ -270,5 +283,6 @@ class Telemetry {
         telemetry.addLine("Press Y: rotate ring 2 revolutions");
         telemetry.addData("Heading (deg)", "%.1f", drive.getHeadingDegrees());
         telemetry.addData("Rotator angle (deg)", "%.1f", pollenShooter.getAngleDegrees());
+        telemetry.addData("Shooter RPM", "%.0f", pollenShooter.getShooterRpm());
     }
 }
