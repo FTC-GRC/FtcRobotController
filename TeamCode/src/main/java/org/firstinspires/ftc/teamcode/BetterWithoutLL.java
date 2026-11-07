@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
@@ -12,7 +13,6 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
 
 @TeleOp(name = "BWLL", group = "At")
 public class BetterWithoutLL extends OpMode {
@@ -40,18 +40,11 @@ public class BetterWithoutLL extends OpMode {
         display.update(drive, pollenShooter);
     }
 }
-
-/** Reads the gamepad once per loop and turns it into named values. All button assignments live here. */
 class Control {
     static final double DEADBAND = 0.02;
     static final double TURN_SCALE = 0.80;
-
-    // Drive
     double forward, right, rotate;
-    boolean robotRelative;   // left bumper held
     boolean resetYaw;        // A
-
-    // Mechanisms
     boolean intakeToggle;    // B
     boolean pollenToggle;    // X
     boolean ringTwoTurns;    // Y
@@ -62,7 +55,6 @@ class Control {
         forward = deadband(-g.left_stick_y);
         right   = deadband(g.left_stick_x);
         rotate  = deadband(g.right_stick_x) * TURN_SCALE;
-        robotRelative = g.left_bumper;
         resetYaw = g.a;
 
         intakeToggle = g.b;
@@ -79,7 +71,6 @@ class Control {
     }
 }
 
-/** Mecanum drive with field-relative control using the goBILDA Pinpoint for heading. */
 class Drive {
     static final double MAX_SPEED = 1.0;
 
@@ -117,11 +108,7 @@ class Drive {
             resetYaw();
         }
 
-        if (c.robotRelative) {
-            drive(c.forward, c.right, c.rotate);
-        } else {
-            driveFieldRelative(c.forward, c.right, c.rotate);
-        }
+        driveFieldRelative(c.forward, c.right, c.rotate);
     }
 
     double getHeadingDegrees() {
@@ -164,7 +151,6 @@ class Drive {
     }
 }
 
-/** The intake motor. Toggles on/off each time its button is pressed. */
 class Intake {
     private final DcMotor motor;
     private boolean lastButton = false;
@@ -184,15 +170,10 @@ class Intake {
     }
 }
 
-/** The shooter motor, plus the CRServo ring and its Through Bore Encoder. */
 class PollenShooter {
-    // Shooter speed. Ticks per second = RPM * ticks per rev / 60.
-    // SHOOTER_CPR is for the motor's output shaft. 28 is a bare goBILDA/REV motor with no gearbox.
     static final double SHOOTER_TARGET_RPM = 3300;
     static final double SHOOTER_CPR = 28;
     static final double SHOOTER_TARGET_TICKS_PER_SEC = SHOOTER_TARGET_RPM * SHOOTER_CPR / 60.0;
-
-    // Through Bore Encoder: 8192 counts per turn. The encoder gear (18T) meshes with the ring (59T).
     static final double ENCODER_CPR = 8192.0;
     static final double GEAR_RATIO = 59.0 / 18.0;
     static final double COUNTS_PER_RING_REV = ENCODER_CPR * GEAR_RATIO;
@@ -215,25 +196,23 @@ class PollenShooter {
 
         shooter.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);   // required for setVelocity()
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rotator.setDirection(DcMotorSimple.Direction.REVERSE);
         encoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         encoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
     }
 
     void update(Control c) {
-        // Shooter toggle: on = hold 3300 RPM, off = stop
         if (c.pollenToggle && !lastShooterButton) {
             shooterOn = !shooterOn;
             shooter.setVelocity(shooterOn ? SHOOTER_TARGET_TICKS_PER_SEC : 0);
         }
         lastShooterButton = c.pollenToggle;
 
-        // Rotate the ring exactly 2 revolutions
         if (c.ringTwoTurns && !lastRingButton) {
             autoRotating = true;
             startCounts = encoder.getCurrentPosition();
-            rotator.setPower(1.0);   // change to -1.0 if it spins the wrong way
+            rotator.setPower(1.0);
         }
         lastRingButton = c.ringTwoTurns;
 
@@ -241,8 +220,6 @@ class PollenShooter {
             rotator.setPower(0.0);
             autoRotating = false;
         }
-
-        // Hold to rotate, release to stop
         if (!autoRotating) {
             if (c.ringForward) {
                 rotator.setPower(1.0);
@@ -262,10 +239,7 @@ class PollenShooter {
         return shooter.getVelocity() * 60.0 / SHOOTER_CPR;
     }
 }
-
-/** Puts the control reminders and live readings on the Driver Station. */
 class Telemetry {
-    // Fully qualified because this class has the same name as the SDK's Telemetry type
     private final org.firstinspires.ftc.robotcore.external.Telemetry telemetry;
 
     Telemetry(org.firstinspires.ftc.robotcore.external.Telemetry telemetry) {
@@ -274,7 +248,6 @@ class Telemetry {
 
     void update(Drive drive, PollenShooter pollenShooter) {
         telemetry.addLine("Press A to reset Yaw");
-        telemetry.addLine("Hold left bumper to drive in robot relative");
         telemetry.addLine("The left joystick sets the robot direction");
         telemetry.addLine("Moving the right joystick left and right turns the robot");
         telemetry.addLine("Press B to toggle intake");
