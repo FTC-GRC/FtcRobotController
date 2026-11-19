@@ -13,6 +13,7 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.hardware.Servo;
 
 @TeleOp(name = "BWLL", group = "At")
 public class BetterWithoutLL extends OpMode {
@@ -20,6 +21,7 @@ public class BetterWithoutLL extends OpMode {
     private Drive drive;
     private Intake intake;
     private PollenShooter pollenShooter;
+    private PollenHolder pollenHolder;
     private Telemetry display;
 
     @Override
@@ -28,6 +30,7 @@ public class BetterWithoutLL extends OpMode {
         drive         = new Drive(hardwareMap);
         intake        = new Intake(hardwareMap);
         pollenShooter = new PollenShooter(hardwareMap);
+        pollenHolder = new PollenHolder(hardwareMap);
         display       = new Telemetry(telemetry);
     }
 
@@ -37,6 +40,7 @@ public class BetterWithoutLL extends OpMode {
         drive.update(control);
         intake.update(control);
         pollenShooter.update(control);
+        pollenHolder.update(control);
         display.update(drive, pollenShooter);
     }
 }
@@ -51,9 +55,10 @@ class Control {
     boolean transferToggle;  // R1
     boolean ringForward;     // D-pad right (hold)
     boolean ringReverse;     // D-pad left (hold)
-    boolean tuneNext;   // gamepad2 right bumper: select next gain
-    boolean tuneUp;     // gamepad2 D-pad up
-    boolean tuneDown;   // gamepad2 D-pad down
+    boolean tuneNext;        // gamepad2 right bumper: select next gain
+    boolean tuneUp;          // gamepad2 D-pad up
+    boolean tuneDown;        // gamepad2 D-pad down
+    boolean holderToggle;    // L1
 
     void update(Gamepad g, Gamepad g2) {
         forward = deadband(-g.left_stick_y);
@@ -69,6 +74,7 @@ class Control {
         tuneNext        = g2.right_bumper;
         tuneUp          = g2.dpad_up;
         tuneDown        = g2.dpad_down;
+        holderToggle    = g.left_bumper;
     }
 
     private double deadband(double value) {
@@ -82,24 +88,24 @@ class Drive {
     static final double MAX_SPEED = 1.0;
     static final double HEADING_SIGN = 1.0;   // change to -1.0 if field-relative feels mirrored
 
-    private final DcMotor frontLeft, frontRight, backLeft, backRight;
+    private final DcMotor frontLeft, frontRight, rearLeft, rearRight;
     private final GoBildaPinpointDriver odo;
 
     private double headingOffsetRad = 0;   // set when A is pressed
 
     Drive(HardwareMap hardwareMap) {
-        frontLeft  = hardwareMap.get(DcMotor.class, "fld");
-        frontRight = hardwareMap.get(DcMotor.class, "frd");
-        backLeft   = hardwareMap.get(DcMotor.class, "bld");
-        backRight  = hardwareMap.get(DcMotor.class, "brd");
-        odo        = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
+        frontLeft  = hardwareMap.get(DcMotor.class, "LF");
+        frontRight = hardwareMap.get(DcMotor.class, "RF");
+        rearLeft   = hardwareMap.get(DcMotor.class, "LR");
+        rearRight  = hardwareMap.get(DcMotor.class, "RR");
+        odo        = hardwareMap.get(GoBildaPinpointDriver.class, "DE");
 
-        backLeft.setDirection(DcMotor.Direction.FORWARD);
-        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        rearLeft.setDirection(DcMotor.Direction.FORWARD);
+        rearRight.setDirection(DcMotorSimple.Direction.REVERSE);
         frontLeft.setDirection(DcMotor.Direction.FORWARD);
         frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight}) {
+        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, rearLeft, rearRight}) {
             m.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
@@ -169,8 +175,8 @@ class Drive {
 
         frontLeft.setPower(Range.clip(MAX_SPEED * (frontLeftPower / maxPower), -1, 1));
         frontRight.setPower(Range.clip(MAX_SPEED * (frontRightPower / maxPower), -1, 1));
-        backLeft.setPower(Range.clip(MAX_SPEED * (backLeftPower / maxPower), -1, 1));
-        backRight.setPower(Range.clip(MAX_SPEED * (backRightPower / maxPower), -1, 1));
+        rearLeft.setPower(Range.clip(MAX_SPEED * (backLeftPower / maxPower), -1, 1));
+        rearRight.setPower(Range.clip(MAX_SPEED * (backRightPower / maxPower), -1, 1));
     }
 }
 
@@ -183,8 +189,8 @@ class Intake {
     private boolean transferOn = false;
 
     Intake(HardwareMap hardwareMap) {
-        intake   = hardwareMap.get(DcMotor.class, "Intake");
-        transfer = hardwareMap.get(DcMotor.class, "ts");
+        intake   = hardwareMap.get(DcMotor.class, "IN");
+        transfer = hardwareMap.get(DcMotor.class, "RT");
         intake.setDirection(DcMotorSimple.Direction.FORWARD);
         transfer.setDirection(DcMotorSimple.Direction.REVERSE);
     }
@@ -208,7 +214,7 @@ class PollenShooter {
     static final double SHOOTER_CPR = 28;
     static final double SHOOTER_TARGET_TICKS_PER_SEC = SHOOTER_TARGET_RPM * SHOOTER_CPR / 60.0;
     static final double ENCODER_CPR = 8192.0;
-    static final double GEAR_RATIO = 59.0 / 18.0;
+    static final double GEAR_RATIO = 2.0;
     static final double COUNTS_PER_RING_REV = ENCODER_CPR * GEAR_RATIO;
     static final double TARGET_COUNTS = 2 * COUNTS_PER_RING_REV;
 
@@ -236,9 +242,9 @@ class PollenShooter {
     private int startCounts = 0;
 
     PollenShooter(HardwareMap hardwareMap) {
-        shooter = hardwareMap.get(DcMotorEx.class, "ps");
-        rotator = hardwareMap.get(CRServo.class, "pr");
-        encoder = hardwareMap.get(DcMotor.class, "pre");
+        shooter = hardwareMap.get(DcMotorEx.class, "PS");
+        rotator = hardwareMap.get(CRServo.class, "PR");
+        encoder = hardwareMap.get(DcMotor.class, "PE");
 
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -326,6 +332,29 @@ class PollenShooter {
     double getGain(int i) { return gains[i]; }
 }
 
+class PollenHolder {
+    static final double HOLD_POS = 0.0;      // tune these on the robot
+    static final double RELEASE_POS = 0.5;
+
+    private final Servo holder;
+    private boolean lastButton = false;
+    private boolean released = false;
+
+    PollenHolder(HardwareMap hardwareMap) {
+        holder = hardwareMap.get(Servo.class, "PH");
+        holder.setPosition(HOLD_POS);
+    }
+
+    void update(Control c) {
+        if (c.holderToggle && !lastButton) {
+            released = !released;
+            holder.setPosition(released ? RELEASE_POS : HOLD_POS);
+        }
+        lastButton = c.holderToggle;
+    }
+
+    boolean isReleased() { return released; }
+}
 class Telemetry {
     private final org.firstinspires.ftc.robotcore.external.Telemetry telemetry;
 
@@ -334,15 +363,16 @@ class Telemetry {
     }
 
     void update(Drive drive, PollenShooter pollenShooter) {
-        telemetry.addLine("Left joystick = robot direction");
-        telemetry.addLine("Right joystick = turn robot");
-        telemetry.addLine("D-pad right/left = rotate servo (release to stop)");
-        telemetry.addLine("x = reset field heading");
-        telemetry.addLine("△ = PS 2 revolutions");
-        telemetry.addLine("○ = intake");
-        telemetry.addLine("□ = shooter");
-        telemetry.addLine("R1 = transfer");
-        telemetry.addLine("G2: R1 = select, D-pad up/down = change selected");
+        telemetry.addLine("1. Left joystick = robot direction");
+        telemetry.addLine("1. Right joystick = turn robot");
+        telemetry.addLine("1. D-pad right/left = rotate servo (release to stop)");
+        telemetry.addLine("1. x = reset field heading");
+        telemetry.addLine("1. △ = PS 2 revolutions");
+        telemetry.addLine("1. ○ = intake");
+        telemetry.addLine("1. □ = shooter");
+        telemetry.addLine("1. R1 = transfer");
+        telemetry.addLine("1. L1 = pollen holder (hold / release)");
+        telemetry.addLine("2. R1 = select, D-pad up/down = change selected");
         telemetry.addData("Pinpoint status", drive.getStatus());
         telemetry.addData("Raw heading (deg)", "%.1f", drive.getRawHeadingDegrees());
         telemetry.addData("Field heading (deg)", "%.1f", drive.getHeadingDegrees());
