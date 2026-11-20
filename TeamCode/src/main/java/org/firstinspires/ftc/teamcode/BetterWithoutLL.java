@@ -14,6 +14,16 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.BezierLine;
+import com.pedropathing.geometry.Pose;
+import com.pedropathing.paths.PathChain;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.BezierLine;
+import com.pedropathing.geometry.Pose;
+import com.pedropathing.paths.PathChain;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name = "BWLL", group = "At")
 public class BetterWithoutLL extends OpMode {
@@ -30,7 +40,7 @@ public class BetterWithoutLL extends OpMode {
         drive         = new Drive(hardwareMap);
         intake        = new Intake(hardwareMap);
         pollenShooter = new PollenShooter(hardwareMap);
-        pollenHolder = new PollenHolder(hardwareMap);
+        pollenHolder  = new PollenHolder(hardwareMap);
         display       = new Telemetry(telemetry);
     }
 
@@ -42,6 +52,10 @@ public class BetterWithoutLL extends OpMode {
         pollenShooter.update(control);
         pollenHolder.update(control);
         display.update(drive, pollenShooter);
+    }
+    @Override
+    public void start() {
+        drive.start();
     }
 }
 
@@ -60,6 +74,7 @@ class Control {
     boolean tuneDown;        // gamepad2 D-pad down
     boolean holderToggle;    // L1
 
+
     void update(Gamepad g, Gamepad g2) {
         forward = deadband(-g.left_stick_y);
         right   = deadband(g.left_stick_x);
@@ -75,6 +90,8 @@ class Control {
         tuneUp          = g2.dpad_up;
         tuneDown        = g2.dpad_down;
         holderToggle    = g.left_bumper;
+        boolean driveToTarget;
+        driveToTarget = g.y;
     }
 
     private double deadband(double value) {
@@ -85,99 +102,53 @@ class Control {
 }
 
 class Drive {
-    static final double MAX_SPEED = 1.0;
-    static final double HEADING_SIGN = 1.0;   // change to -1.0 if field-relative feels mirrored
+    private final Follower follower;
+    private boolean autoActive = false;
 
-    private final DcMotor frontLeft, frontRight, rearLeft, rearRight;
-    private final GoBildaPinpointDriver odo;
-
-    private double headingOffsetRad = 0;   // set when A is pressed
+    // Example target pose (inches, heading in radians). Change to a real spot on your field.
+    private static final Pose TARGET = new Pose(36, 0, Math.toRadians(0));
 
     Drive(HardwareMap hardwareMap) {
-        frontLeft  = hardwareMap.get(DcMotor.class, "LF");
-        frontRight = hardwareMap.get(DcMotor.class, "RF");
-        rearLeft   = hardwareMap.get(DcMotor.class, "LR");
-        rearRight  = hardwareMap.get(DcMotor.class, "RR");
-        odo        = hardwareMap.get(GoBildaPinpointDriver.class, "DE");
+        follower = Constants.createFollower(hardwareMap);
+        follower.setStartingPose(new Pose(0, 0, 0));
+    }
 
-        rearLeft.setDirection(DcMotor.Direction.FORWARD);
-        rearRight.setDirection(DcMotorSimple.Direction.REVERSE);
-        frontLeft.setDirection(DcMotor.Direction.FORWARD);
-        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
-
-        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, rearLeft, rearRight}) {
-            m.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        }
-
-        odo.setOffsets(-84.0, -168.0, DistanceUnit.MM);   // measure on your robot
-        odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD,
-                GoBildaPinpointDriver.EncoderDirection.FORWARD);
-        odo.resetPosAndIMU();
+    void start() {
+        follower.startTeleopDrive();
     }
 
     void update(Control c) {
-        odo.update();                       // runs every loop, always on
+        follower.update();   // must run every loop
 
-        if (c.resetYaw) {
-            headingOffsetRad = odo.getPosition().getHeading(AngleUnit.RADIANS);
+        if (c.resetYaw) {    // reset field heading, keep position
+            Pose p = follower.getPose();
+            follower.setPose(new Pose(p.getX(), p.getY(), 0));
         }
 
-        driveFieldRelative(c.forward, c.right, c.rotate);
+        if (c.driveToTarget && !autoActive) {
+            PathChain path = follower.pathBuilder()
+                    .addPath(new BezierLine(follower.getPose(), TARGET))
+                    .setLinearHeadingInterpolation(follower.getHeading(), TARGET.getHeading())
+                    .build();
+            follower.followPath(path);
+            autoActive = true;
+        } else if (!c.driveToTarget && autoActive) {
+            follower.startTeleopDrive();   // button released: back to manual
+            autoActive = false;
+        }
+
+        if (!autoActive) {
+            // Pedro: strafe + = left, turn + = counter-clockwise, so both flip.
+            // false = field-centric
+            follower.setTeleOpDrive(c.forward, -c.right, -c.rotate, false);
+        }
     }
 
-    private double getFieldHeadingRad() {
-        return AngleUnit.normalizeRadians(
-                HEADING_SIGN * (odo.getPosition().getHeading(AngleUnit.RADIANS) - headingOffsetRad));
-    }
-
-    double getHeadingDegrees() {
-        return Math.toDegrees(getFieldHeadingRad());
-    }
-
-    String getStatus() {
-        return odo.getDeviceStatus().toString();
-    }
-
-    double getRawHeadingDegrees() {
-        return odo.getPosition().getHeading(AngleUnit.DEGREES);
-    }
-
-    double getXmm() {
-        return odo.getPosition().getX(DistanceUnit.MM);
-    }
-
-    double getYmm() {
-        return odo.getPosition().getY(DistanceUnit.MM);
-    }
-
-    private void driveFieldRelative(double forward, double right, double rotate) {
-        double theta = Math.atan2(forward, right);
-        double r = Math.hypot(right, forward);
-
-        theta = AngleUnit.normalizeRadians(theta - getFieldHeadingRad());
-
-        drive(r * Math.sin(theta), r * Math.cos(theta), rotate);
-    }
-
-    private void drive(double forward, double right, double rotate) {
-        double frontLeftPower  = forward + right + rotate;
-        double frontRightPower = forward - right - rotate;
-        double backRightPower  = forward + right - rotate;
-        double backLeftPower   = forward - right + rotate;
-
-        double maxPower = 1.0;
-        maxPower = Math.max(maxPower, Math.abs(frontLeftPower));
-        maxPower = Math.max(maxPower, Math.abs(frontRightPower));
-        maxPower = Math.max(maxPower, Math.abs(backRightPower));
-        maxPower = Math.max(maxPower, Math.abs(backLeftPower));
-
-        frontLeft.setPower(Range.clip(MAX_SPEED * (frontLeftPower / maxPower), -1, 1));
-        frontRight.setPower(Range.clip(MAX_SPEED * (frontRightPower / maxPower), -1, 1));
-        rearLeft.setPower(Range.clip(MAX_SPEED * (backLeftPower / maxPower), -1, 1));
-        rearRight.setPower(Range.clip(MAX_SPEED * (backRightPower / maxPower), -1, 1));
-    }
+    double getHeadingDegrees()    { return Math.toDegrees(follower.getHeading()); }
+    double getRawHeadingDegrees() { return Math.toDegrees(follower.getHeading()); }
+    double getXmm()               { return follower.getPose().getX() * 25.4; }
+    double getYmm()               { return follower.getPose().getY() * 25.4; }
+    String getStatus()            { return autoActive ? "Pedro: following" : "Pedro: teleop"; }
 }
 
 class Intake {
@@ -191,7 +162,7 @@ class Intake {
     Intake(HardwareMap hardwareMap) {
         intake   = hardwareMap.get(DcMotor.class, "IN");
         transfer = hardwareMap.get(DcMotor.class, "RT");
-        intake.setDirection(DcMotorSimple.Direction.FORWARD);
+        intake.setDirection(DcMotorSimple.Direction.REVERSE);
         transfer.setDirection(DcMotorSimple.Direction.REVERSE);
     }
 
@@ -246,7 +217,7 @@ class PollenShooter {
         rotator = hardwareMap.get(CRServo.class, "PR");
         encoder = hardwareMap.get(DcMotor.class, "PE");
 
-        shooter.setDirection(DcMotorSimple.Direction.FORWARD);
+        shooter.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         // Must be RUN_WITHOUT_ENCODER: the loop below sets the power itself,
         // and RUN_USING_ENCODER would add the hub's own velocity PID on top of it.
