@@ -19,11 +19,6 @@ import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
-import com.pedropathing.follower.Follower;
-import com.pedropathing.geometry.BezierLine;
-import com.pedropathing.geometry.Pose;
-import com.pedropathing.paths.PathChain;
-import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name = "BWLL", group = "At")
 public class BetterWithoutLL extends OpMode {
@@ -73,7 +68,8 @@ class Control {
     boolean tuneUp;          // gamepad2 D-pad up
     boolean tuneDown;        // gamepad2 D-pad down
     boolean holderToggle;    // L1
-
+    boolean driveToTarget;   // Y (hold), only if Drive.ENABLE_DRIVE_TO_TARGET
+    boolean driveModeToggle; // Share / Back: field-relative <-> robot-relative
 
     void update(Gamepad g, Gamepad g2) {
         forward = deadband(-g.left_stick_y);
@@ -90,8 +86,8 @@ class Control {
         tuneUp          = g2.dpad_up;
         tuneDown        = g2.dpad_down;
         holderToggle    = g.left_bumper;
-        boolean driveToTarget;
-        driveToTarget = g.y;
+        driveToTarget   = g.y;
+        driveModeToggle = g.back;
     }
 
     private double deadband(double value) {
@@ -101,23 +97,71 @@ class Control {
     }
 }
 
+/**
+ * Mecanum drive. Two implementations behind one switch:
+ *  - USE_PEDRO = false: the hand-written drive that already ran on the robot (default, safest).
+ *  - USE_PEDRO = true:  Pedro Pathing teleop (not yet tested on the robot).
+ * Both read heading from the Pinpoint "DE". Share/Back toggles field-relative <-> robot-relative.
+ */
 class Drive {
-    private final Follower follower;
-    private boolean autoActive = false;
+    static final boolean USE_PEDRO = false;
+    static final boolean ENABLE_DRIVE_TO_TARGET = false;   // Y button, Pedro only. Keep off until Pedro is tuned.
+    static final double HEADING_SIGN = 1.0;                // -1.0 if field-relative feels mirrored
 
-    // Example target pose (inches, heading in radians). Change to a real spot on your field.
-    private static final Pose TARGET = new Pose(36, 0, Math.toRadians(0));
+    // Pedro
+    private Follower follower;
+    private boolean autoActive = false;
+    private static final Pose TARGET = new Pose(36, 0, Math.toRadians(0));   // example, change before enabling
+
+    // Hand-written
+    private DcMotor frontLeft, frontRight, rearLeft, rearRight;
+    private GoBildaPinpointDriver odo;
+    private double headingOffsetRad = 0;
+
+    private boolean fieldRelative = true;
+    private boolean lastToggle = false;
 
     Drive(HardwareMap hardwareMap) {
-        follower = Constants.createFollower(hardwareMap);
-        follower.setStartingPose(new Pose(0, 0, 0));
+        if (USE_PEDRO) {
+            follower = Constants.createFollower(hardwareMap);
+            follower.setStartingPose(new Pose(0, 0, 0));
+            return;
+        }
+        frontLeft  = hardwareMap.get(DcMotor.class, "LF");
+        frontRight = hardwareMap.get(DcMotor.class, "RF");
+        rearLeft   = hardwareMap.get(DcMotor.class, "LR");
+        rearRight  = hardwareMap.get(DcMotor.class, "RR");
+        odo        = hardwareMap.get(GoBildaPinpointDriver.class, "DE");
+
+        frontLeft.setDirection(DcMotorSimple.Direction.FORWARD);
+        rearLeft.setDirection(DcMotorSimple.Direction.FORWARD);
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        rearRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, rearLeft, rearRight}) {
+            m.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        }
+
+        odo.setOffsets(-84.0, -168.0, DistanceUnit.MM);
+        odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD,
+                GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        odo.resetPosAndIMU();   // robot must be still for a moment after INIT
     }
 
     void start() {
-        follower.startTeleopDrive();
+        if (USE_PEDRO) follower.startTeleopDrive();
     }
 
     void update(Control c) {
+        if (c.driveModeToggle && !lastToggle) fieldRelative = !fieldRelative;
+        lastToggle = c.driveModeToggle;
+
+        if (USE_PEDRO) updatePedro(c);
+        else updateHandWritten(c);
+    }
+
+    private void updatePedro(Control c) {
         follower.update();   // must run every loop
 
         if (c.resetYaw) {    // reset field heading, keep position
@@ -125,30 +169,73 @@ class Drive {
             follower.setPose(new Pose(p.getX(), p.getY(), 0));
         }
 
-        if (c.driveToTarget && !autoActive) {
+        boolean wantAuto = ENABLE_DRIVE_TO_TARGET && c.driveToTarget;
+        if (wantAuto && !autoActive) {
             PathChain path = follower.pathBuilder()
                     .addPath(new BezierLine(follower.getPose(), TARGET))
                     .setLinearHeadingInterpolation(follower.getHeading(), TARGET.getHeading())
                     .build();
             follower.followPath(path);
             autoActive = true;
-        } else if (!c.driveToTarget && autoActive) {
+        } else if (!wantAuto && autoActive) {
             follower.startTeleopDrive();   // button released: back to manual
             autoActive = false;
         }
 
         if (!autoActive) {
-            // Pedro: strafe + = left, turn + = counter-clockwise, so both flip.
-            // false = field-centric
-            follower.setTeleOpDrive(c.forward, -c.right, -c.rotate, false);
+            // Pedro: strafe + = left, turn + = counter-clockwise, so both flip. 4th arg = isRobotCentric.
+            follower.setTeleOpDrive(c.forward, -c.right, -c.rotate, !fieldRelative);
         }
     }
 
-    double getHeadingDegrees()    { return Math.toDegrees(follower.getHeading()); }
-    double getRawHeadingDegrees() { return Math.toDegrees(follower.getHeading()); }
-    double getXmm()               { return follower.getPose().getX() * 25.4; }
-    double getYmm()               { return follower.getPose().getY() * 25.4; }
-    String getStatus()            { return autoActive ? "Pedro: following" : "Pedro: teleop"; }
+    private void updateHandWritten(Control c) {
+        odo.update();   // every loop
+
+        if (c.resetYaw) {
+            headingOffsetRad = odo.getPosition().getHeading(AngleUnit.RADIANS);
+        }
+
+        if (fieldRelative) {
+            double theta = Math.atan2(c.forward, c.right);
+            double r = Math.hypot(c.right, c.forward);
+            theta = AngleUnit.normalizeRadians(theta - getFieldHeadingRad());
+            mecanum(r * Math.sin(theta), r * Math.cos(theta), c.rotate);
+        } else {
+            mecanum(c.forward, c.right, c.rotate);
+        }
+    }
+
+    private double getFieldHeadingRad() {
+        return AngleUnit.normalizeRadians(
+                HEADING_SIGN * (odo.getPosition().getHeading(AngleUnit.RADIANS) - headingOffsetRad));
+    }
+
+    private void mecanum(double forward, double right, double rotate) {
+        double fl = forward + right + rotate;
+        double fr = forward - right - rotate;
+        double bl = forward - right + rotate;
+        double br = forward + right - rotate;
+        double max = Math.max(1.0, Math.max(Math.max(Math.abs(fl), Math.abs(fr)), Math.max(Math.abs(bl), Math.abs(br))));
+        frontLeft.setPower(fl / max);
+        frontRight.setPower(fr / max);
+        rearLeft.setPower(bl / max);
+        rearRight.setPower(br / max);
+    }
+
+    String getMode() { return (USE_PEDRO ? "Pedro, " : "") + (fieldRelative ? "FIELD-relative" : "ROBOT-relative"); }
+
+    double getHeadingDegrees() {
+        return USE_PEDRO ? Math.toDegrees(follower.getHeading()) : Math.toDegrees(getFieldHeadingRad());
+    }
+    double getRawHeadingDegrees() {
+        return USE_PEDRO ? Math.toDegrees(follower.getHeading()) : odo.getPosition().getHeading(AngleUnit.DEGREES);
+    }
+    double getXmm() { return USE_PEDRO ? follower.getPose().getX() * 25.4 : odo.getPosition().getX(DistanceUnit.MM); }
+    double getYmm() { return USE_PEDRO ? follower.getPose().getY() * 25.4 : odo.getPosition().getY(DistanceUnit.MM); }
+    String getStatus() {
+        if (USE_PEDRO) return autoActive ? "Pedro: following" : "Pedro: teleop";
+        return odo.getDeviceStatus().toString();
+    }
 }
 
 class Intake {
@@ -181,7 +268,7 @@ class Intake {
 }
 
 class PollenShooter {
-    static final double SHOOTER_TARGET_RPM = 3000;
+    static final double SHOOTER_TARGET_RPM = 3300;
     static final double SHOOTER_CPR = 28;
     static final double SHOOTER_TARGET_TICKS_PER_SEC = SHOOTER_TARGET_RPM * SHOOTER_CPR / 60.0;
     static final double ENCODER_CPR = 8192.0;
@@ -337,8 +424,10 @@ class Telemetry {
         telemetry.addLine("1. Left joystick = robot direction");
         telemetry.addLine("1. Right joystick = turn robot");
         telemetry.addLine("1. D-pad right/left = rotate servo (release to stop)");
-        telemetry.addLine("1. x = reset field heading");
-        telemetry.addLine("1. △ = PS 2 revolutions");
+        telemetry.addLine("1. A (✕) = reset field heading");
+        telemetry.addLine("1. Share/Back = toggle field / robot relative");
+        if (Drive.ENABLE_DRIVE_TO_TARGET) telemetry.addLine("1. Y (△) hold = drive to target");
+        telemetry.addData("Drive mode", drive.getMode());
         telemetry.addLine("1. ○ = intake");
         telemetry.addLine("1. □ = shooter");
         telemetry.addLine("1. R1 = transfer");

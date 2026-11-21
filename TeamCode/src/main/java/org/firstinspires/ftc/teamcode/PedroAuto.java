@@ -5,9 +5,11 @@ import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
+@Disabled   // Hidden until Pedro is tuned. Remove this line to show it on the Driver Station.
 @Autonomous(name = "Pedro Auto", group = "At")
 public class PedroAuto extends OpMode {
     private Follower follower;
@@ -36,6 +38,5 @@ public class PedroAuto extends OpMode {
         telemetry.addData("Pose", follower.getPose());
         telemetry.addData("Busy", follower.isBusy());
         telemetry.update();
-        }
     }
 }
