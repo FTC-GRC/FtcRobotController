@@ -70,6 +70,8 @@ class Control {
     boolean holderToggle;    // L1
     boolean driveToTarget;   // Y (hold), only if Drive.ENABLE_DRIVE_TO_TARGET
     boolean driveModeToggle; // Share / Back: field-relative <-> robot-relative
+    boolean reverseIntake;   // G2 A
+    boolean reverseTransfer; // G2 B
 
     void update(Gamepad g, Gamepad g2) {
         forward = deadband(-g.left_stick_y);
@@ -88,6 +90,8 @@ class Control {
         holderToggle    = g.left_bumper;
         driveToTarget   = g.y;
         driveModeToggle = g.back;
+        reverseIntake   = g2.a;
+        reverseTransfer = g2.b;
     }
 
     private double deadband(double value) {
@@ -238,7 +242,7 @@ class Drive {
     }
 }
 
-class Intake {
+class  Intake {
     private final DcMotor intake;
     private final DcMotor transfer;
     private boolean lastIntakeButton = false;
@@ -249,8 +253,6 @@ class Intake {
     Intake(HardwareMap hardwareMap) {
         intake   = hardwareMap.get(DcMotor.class, "IN");
         transfer = hardwareMap.get(DcMotor.class, "RT");
-        intake.setDirection(DcMotorSimple.Direction.REVERSE);
-        transfer.setDirection(DcMotorSimple.Direction.REVERSE);
     }
 
     void update(Control c) {
@@ -264,6 +266,18 @@ class Intake {
         }
         lastIntakeButton = c.intakeToggle;
         lastTransferButton = c.transferToggle;
+        if (c.reverseIntake = true)
+            intake.setDirection(DcMotorSimple.Direction.FORWARD);
+            intake.setPower(1.0);
+        if (c.reverseIntake = false)
+            intake.setDirection(DcMotorSimple.Direction.REVERSE);
+            intake.setPower(0.0);
+        if (c.reverseTransfer = true)
+            transfer.setDirection(DcMotorSimple.Direction.FORWARD);
+            transfer.setPower(1.0);
+        if (c.reverseTransfer = false)
+            transfer.setDirection(DcMotorSimple.Direction.REVERSE);
+            transfer.setPower(0.0);
     }
 }
 
@@ -424,9 +438,9 @@ class Telemetry {
         telemetry.addLine("1. Left joystick = robot direction");
         telemetry.addLine("1. Right joystick = turn robot");
         telemetry.addLine("1. D-pad right/left = rotate servo (release to stop)");
-        telemetry.addLine("1. A (✕) = reset field heading");
+        telemetry.addLine("1. X = reset field heading");
         telemetry.addLine("1. Share/Back = toggle field / robot relative");
-        if (Drive.ENABLE_DRIVE_TO_TARGET) telemetry.addLine("1. Y (△) hold = drive to target");
+        if (Drive.ENABLE_DRIVE_TO_TARGET) telemetry.addLine("1. △ hold = drive to target");
         telemetry.addData("Drive mode", drive.getMode());
         telemetry.addLine("1. ○ = intake");
         telemetry.addLine("1. □ = shooter");
